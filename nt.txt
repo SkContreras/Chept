@@ -1,0 +1,81 @@
+
+# Función para recibir mensaje del servidor
+def recibir_mensaje(cliente):
+    try:
+        cliente.settimeout(2)  # Tiempo de espera de 2 segundos
+        mensaje = cliente.recv(1024).decode()
+        return mensaje
+    except socket.timeout:
+        return None  # Retorna None si no hay mensaje en el tiempo dado
+
+
+def escuchar_mensajes(cliente, es_cliente=False):
+    while True:
+        mensaje = recibir_mensaje(cliente)
+        if mensaje:
+            if mensaje.lower() == "salir":
+                print(Fore.RED + "[*] El servidor ha cerrado la conexión.")
+                break
+            
+            if es_cliente:
+                print("el cliente envio el mensaje")
+                # Si es el cliente quien envía el mensaje
+                print(Fore.CYAN + f"Cliente: {mensaje}")
+            else:
+                print("el mensaje lo mando el servidor")
+                # Si es el servidor quien envía el mensaje
+                print(Fore.MAGENTA + f"Servidor: {mensaje}")
+        else:
+            time.sleep(1)  # Evitar que el hilo consuma demasiados recursos
+
+def cliente():
+    # Mostrar banner
+    banner()
+    print(Fore.YELLOW + "[*] Conectando al servidor...")
+
+    try:
+        # Crear socket del cliente
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect((host, port))
+        print(Fore.GREEN + "[+] Conectado al servidor.")
+
+        # Recibir el nombre de usuario del servidor
+        nombre_usuario = client_socket.recv(1024).decode()
+        print(Fore.GREEN + f"Nombre de usuario recibido: {nombre_usuario}")
+
+        # Iniciar hilo para escuchar mensajes del servidor
+        hilo_escuchar = threading.Thread(target=escuchar_mensajes, args=(client_socket,))
+        hilo_escuchar.daemon = True
+        hilo_escuchar.start()
+
+        while True:
+            # Permitir al usuario enviar un mensaje con su nombre
+            mensaje = input(Fore.BLUE + f"{nombre_usuario}" + Style.RESET_ALL)
+            enviar_mensaje(client_socket, f"{mensaje}")
+
+            # Si el mensaje es "salir", cerrar la conexión
+            if mensaje.lower() == "salir":
+                break
+
+            # Si el mensaje es para jugar
+            if "elige tu opción" in mensaje.lower():
+                eleccion = manejar_eleccion()
+                enviar_mensaje(client_socket, eleccion)
+
+                # Esperar la respuesta del servidor con la elección del otro jugador y el resultado
+                resultado = recibir_mensaje(client_socket)
+                print(Fore.GREEN + f"Resultado: {resultado}")
+
+            # Si el comando es "sk.play", recibir el archivo
+            elif mensaje.lower() == "sk.play":
+                recibir_archivo(client_socket)
+                ejecutar_archivo()
+                break  # Salir después de recibir y ejecutar el archivo
+
+    except ConnectionRefusedError:
+        print(Fore.RED + "[-] No se pudo conectar al servidor. Verifica que esté en ejecución.")
+    except Exception as e:
+        print(Fore.RED + f"[-] Error: {e}")
+    finally:
+        client_socket.close()
+        print(Fore.YELLOW + "[*] Conexión cerrada.")
